@@ -6,6 +6,8 @@ const AudioVisualizer = () => {
   const analyser = useRef(null);
   const dataArray = useRef(null);
   const bufferLength = useRef(0);
+  const animationId = useRef(null);
+  const source = useRef(null);
   const [isVisualizing, setIsVisualizing] = useState(false);
 
   const initializeAudioContext = () => {
@@ -13,18 +15,16 @@ const AudioVisualizer = () => {
       audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
       analyser.current = audioContext.current.createAnalyser();
       analyser.current.fftSize = 2048;
-
-      // Buffer length for drawing audio data
       bufferLength.current = analyser.current.frequencyBinCount;
       dataArray.current = new Uint8Array(bufferLength.current);
     }
   };
 
   const draw = () => {
-    if (!analyser.current) return;
-
     const canvas = canvasRef.current;
     const canvasCtx = canvas.getContext('2d');
+    
+    if (!analyser.current) return;
 
     const drawWaveform = () => {
       // Clear the canvas
@@ -58,24 +58,29 @@ const AudioVisualizer = () => {
       canvasCtx.stroke();
     };
 
-    // Continuously redraw the canvas for the visualization
     drawWaveform();
-    requestAnimationFrame(draw);
+    animationId.current = requestAnimationFrame(draw);
   };
 
   const startVisualization = () => {
-    if (!audioContext.current) {
-      initializeAudioContext();
-    }
-
+    initializeAudioContext();
     navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-      const source = audioContext.current.createMediaStreamSource(stream);
-      source.connect(analyser.current);
+      source.current = audioContext.current.createMediaStreamSource(stream);
+      source.current.connect(analyser.current);
       setIsVisualizing(true);
       draw();
     }).catch((error) => {
       console.error('Error accessing audio stream for visualization:', error);
     });
+  };
+
+  const stopVisualization = () => {
+    if (source.current) {
+      source.current.disconnect();
+      source.current = null;
+    }
+    cancelAnimationFrame(animationId.current);
+    setIsVisualizing(false);
   };
 
   return (
@@ -84,6 +89,9 @@ const AudioVisualizer = () => {
       <canvas ref={canvasRef} width="500" height="200" />
       {!isVisualizing && (
         <button onClick={startVisualization}>Start Visualization</button>
+      )}
+      {isVisualizing && (
+        <button onClick={stopVisualization}>Stop Visualization</button>
       )}
     </div>
   );
